@@ -42,6 +42,7 @@ db.serialize(() => {
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
+app.set("trust proxy", 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use("/public", express.static(path.join(__dirname, "public")));
@@ -54,6 +55,7 @@ app.use(
       dir: STORAGE_ROOT,
     }),
     secret: SESSION_SECRET,
+    proxy: process.env.NODE_ENV === "production",
     resave: false,
     saveUninitialized: false,
     cookie: {
