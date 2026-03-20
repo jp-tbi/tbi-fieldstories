@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/public/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Store Content Submission</h1>
+      <p>Share your store story and upload one photo.</p>
+
+      <% if (error) { %>
+      <div class="alert error"><%= error %></div>
+      <% } %>
+
+      <% if (success) { %>
+      <div class="alert success"><%= success %></div>
+      <% } %>
+
+      <form method="POST" action="/submit" enctype="multipart/form-data" class="card" id="submission-form">
+        <% questions.forEach((q) => { %>
+        <label for="<%= q.id %>"><%= q.label %> <%= q.required ? "*" : "" %></label>
+        <% if (q.type === "textarea") { %>
+        <textarea id="<%= q.id %>" name="<%= q.id %>" <%= q.required ? "required" : "" %>></textarea>
+        <% } else if (q.type === "select") { %>
+        <select id="<%= q.id %>" name="<%= q.id %>" <%= q.required ? "required" : "" %>>
+          <option value="">Select one</option>
+          <% (q.options || []).forEach((option) => { %>
+          <option value="<%= option %>"><%= option %></option>
+          <% }) %>
+        </select>
+        <% } else if (q.type === "radio") { %>
+        <div class="radio-group">
+          <% (q.options || []).forEach((option, idx) => { %>
+          <label class="radio-option" for="<%= q.id %>_<%= idx %>">
+            <input
+              id="<%= q.id %>_<%= idx %>"
+              name="<%= q.id %>"
+              type="radio"
+              value="<%= option %>"
+              <%= q.required ? "required" : "" %>
+            />
+            <span><%= option %></span>
+          </label>
+          <% }) %>
+        </div>
+        <% } else { %>
+        <input id="<%= q.id %>" name="<%= q.id %>" type="text" <%= q.required ? "required" : "" %> />
+        <% } %> <% }); %>
+
+        <label for="photo">Upload Photo</label>
+        <input id="photo" name="photo" type="file" accept="image/*" />
+
+        <button type="submit">Submit</button>
+      </form>
+    </main>
+    <script>
+      (function () {
+        const photoQuestionName = "photo_permission";
+        const yesValue = "Yes - I will upload it";
+        const photoInput = document.getElementById("photo");
+
+        function updatePhotoRequirement() {
+          const selected = document.querySelector(
+            `input[name="${photoQuestionName}"]:checked`
+          );
+          photoInput.required = selected && selected.value === yesValue;
+        }
+
+        document
+          .querySelectorAll(`input[name="${photoQuestionName}"]`)
+          .forEach((el) => el.addEventListener("change", updatePhotoRequirement));
+
+        updatePhotoRequirement();
+      })();
+    </script>
+  </body>
+</html>

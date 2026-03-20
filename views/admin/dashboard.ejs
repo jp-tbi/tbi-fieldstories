@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/public/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="row">
+        <h1>Admin Dashboard</h1>
+        <form method="POST" action="/admin/logout">
+          <button type="submit">Log out</button>
+        </form>
+      </header>
+
+      <% if (!submissions.length) { %>
+      <p>No submissions yet.</p>
+      <% } %>
+
+      <div class="grid">
+        <% submissions.forEach((item) => { %>
+        <article class="card submission">
+          <h2><%= item.store_name %></h2>
+          <p><strong>Submitted by:</strong> <%= item.submitter_name %> <%= item.submitter_email ? "(" + item.submitter_email + ")" : "" %></p>
+          <p><strong>Date:</strong> <%= item.created_at %></p>
+
+          <% if (item.image_path) { %>
+          <img src="/uploads/<%= item.image_path %>" alt="Submitted store photo" class="photo" />
+          <% } %>
+
+          <section>
+            <% item.answers.forEach((a) => { %>
+            <p><strong><%= a.label %></strong><br /><%= a.value || "-" %></p>
+            <% }) %>
+          </section>
+        </article>
+        <% }) %>
+      </div>
+    </main>
+  </body>
+</html>
