@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="<%= lang %>">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,8 +8,15 @@
   </head>
   <body>
     <main class="container">
-      <h1>Store Content Submission</h1>
-      <p>Share your store story and upload one photo.</p>
+      <div class="row">
+        <h1><%= lang === "fr" ? "Soumission de contenu magasin" : "Store Content Submission" %></h1>
+        <div>
+          <a href="/submit?lang=en">English</a> | <a href="/submit?lang=fr">Francais</a>
+        </div>
+      </div>
+      <p>
+        <%= lang === "fr" ? "Partagez votre histoire et televersez une photo." : "Share your store story and upload one photo." %>
+      </p>
 
       <% if (error) { %>
       <div class="alert error"><%= error %></div>
@@ -20,29 +27,33 @@
       <% } %>
 
       <form method="POST" action="/submit" enctype="multipart/form-data" class="card" id="submission-form">
+        <input type="hidden" name="lang" value="<%= lang %>" />
         <% questions.forEach((q) => { %>
-        <label for="<%= q.id %>"><%= q.label %> <%= q.required ? "*" : "" %></label>
+        <% const questionLabel = typeof q.label === "string" ? q.label : (q.label[lang] || q.label.en); %>
+        <label for="<%= q.id %>"><%= questionLabel %> <%= q.required ? "*" : "" %></label>
         <% if (q.type === "textarea") { %>
         <textarea id="<%= q.id %>" name="<%= q.id %>" <%= q.required ? "required" : "" %>></textarea>
         <% } else if (q.type === "select") { %>
         <select id="<%= q.id %>" name="<%= q.id %>" <%= q.required ? "required" : "" %>>
-          <option value="">Select one</option>
+          <option value=""><%= lang === "fr" ? "Selectionnez une option" : "Select one" %></option>
           <% (q.options || []).forEach((option) => { %>
-          <option value="<%= option %>"><%= option %></option>
+          <% const optionLabel = typeof option.label === "string" ? option.label : (option.label[lang] || option.label.en); %>
+          <option value="<%= option.value %>"><%= optionLabel %></option>
           <% }) %>
         </select>
         <% } else if (q.type === "radio") { %>
         <div class="radio-group">
           <% (q.options || []).forEach((option, idx) => { %>
+          <% const optionLabel = typeof option.label === "string" ? option.label : (option.label[lang] || option.label.en); %>
           <label class="radio-option" for="<%= q.id %>_<%= idx %>">
             <input
               id="<%= q.id %>_<%= idx %>"
               name="<%= q.id %>"
               type="radio"
-              value="<%= option %>"
+              value="<%= option.value %>"
               <%= q.required ? "required" : "" %>
             />
-            <span><%= option %></span>
+            <span><%= optionLabel %></span>
           </label>
           <% }) %>
         </div>
@@ -50,16 +61,16 @@
         <input id="<%= q.id %>" name="<%= q.id %>" type="text" <%= q.required ? "required" : "" %> />
         <% } %> <% }); %>
 
-        <label for="photo">Upload Photo</label>
+        <label for="photo"><%= lang === "fr" ? "Televerser une photo" : "Upload Photo" %></label>
         <input id="photo" name="photo" type="file" accept="image/*" />
 
-        <button type="submit">Submit</button>
+        <button type="submit"><%= lang === "fr" ? "Soumettre" : "Submit" %></button>
       </form>
     </main>
     <script>
       (function () {
         const photoQuestionName = "photo_permission";
-        const yesValue = "Yes - I will upload it";
+        const yesValue = "yes_upload";
         const photoInput = document.getElementById("photo");
 
         function updatePhotoRequirement() {

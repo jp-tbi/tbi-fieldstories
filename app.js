@@ -19,6 +19,7 @@ const DB_PATH = path.join(STORAGE_ROOT, "cms.sqlite");
 const UPLOADS_DIR = path.join(STORAGE_ROOT, "uploads");
 
 const questions = require("./questions");
+const SUPPORTED_LANGS = new Set(["en", "fr"]);
 
 fs.mkdirSync(STORAGE_ROOT, { recursive: true });
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -88,10 +89,47 @@ const upload = multer({
   },
 });
 
-function buildAnswersFromBody(body) {
+function getLang(value) {
+  const lang = String(value || "en").toLowerCase();
+  return SUPPORTED_LANGS.has(lang) ? lang : "en";
+}
+
+function i18nText(value, lang) {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value && typeof value === "object") {
+    return value[lang] || value.en || "";
+  }
+  return "";
+}
+
+function uiText(lang, key) {
+  const texts = {
+    requiredError: {
+      en: "Your name and store number/location are required.",
+      fr: "Votre nom et le numero/emplacement du magasin sont obligatoires.",
+    },
+    photoRequiredError: {
+      en: "Please upload a photo or choose No for photo.",
+      fr: "Veuillez televerser une photo ou choisir Non pour la photo.",
+    },
+    saveError: {
+      en: "Could not save submission.",
+      fr: "Impossible d'enregistrer la soumission.",
+    },
+    saveSuccess: {
+      en: "Thanks! Your submission was saved.",
+      fr: "Merci! Votre soumission a ete enregistree.",
+    },
+  };
+  return texts[key][lang] || texts[key].en;
+}
+
+function buildAnswersFromBody(body, lang) {
   return questions.map((q) => ({
     id: q.id,
-    label: q.label,
+    label: i18nText(q.label, lang),
     value: String(body[q.id] || "").trim(),
   }));
 }
@@ -109,15 +147,18 @@ app.get("/", (_req, res) => {
 });
 
 app.get("/submit", (req, res) => {
+  const lang = getLang(req.query.lang);
   res.render("submit", {
-    title: "Store Content Submission",
+    title: lang === "fr" ? "Soumission de contenu magasin" : "Store Content Submission",
     questions,
+    lang,
     error: req.query.error || "",
     success: req.query.success || "",
   });
 });
 
 app.post("/submit", upload.single("photo"), (req, res) => {
+  const lang = getLang(req.body.lang);
   const storeName = String(
     req.body.store_number_location || req.body.store_name || ""
   ).trim();
@@ -127,19 +168,19 @@ app.post("/submit", upload.single("photo"), (req, res) => {
   const submitterEmail = "";
 
   if (!storeName || !submitterName) {
-    res.redirect(
-      "/submit?error=Your+name+and+store+number/location+are+required."
-    );
+    const error = encodeURIComponent(uiText(lang, "requiredError"));
+    res.redirect(`/submit?lang=${lang}&error=${error}`);
     return;
   }
 
-  const wantsPhoto = String(req.body.photo_permission || "").trim() === "Yes - I will upload it";
+  const wantsPhoto = String(req.body.photo_permission || "").trim() === "yes_upload";
   if (wantsPhoto && !req.file) {
-    res.redirect("/submit?error=Please+upload+a+photo+or+choose+No+for+photo.");
+    const error = encodeURIComponent(uiText(lang, "photoRequiredError"));
+    res.redirect(`/submit?lang=${lang}&error=${error}`);
     return;
   }
 
-  const answers = buildAnswersFromBody(req.body);
+  const answers = buildAnswersFromBody(req.body, lang);
   const imagePath = req.file ? req.file.filename : null;
 
   db.run(
@@ -150,10 +191,12 @@ app.post("/submit", upload.single("photo"), (req, res) => {
     [storeName, submitterName, submitterEmail, JSON.stringify(answers), imagePath],
     (err) => {
       if (err) {
-        res.redirect("/submit?error=Could+not+save+submission.");
+        const error = encodeURIComponent(uiText(lang, "saveError"));
+        res.redirect(`/submit?lang=${lang}&error=${error}`);
         return;
       }
-      res.redirect("/submit?success=Thanks!+Your+submission+was+saved.");
+      const success = encodeURIComponent(uiText(lang, "saveSuccess"));
+      res.redirect(`/submit?lang=${lang}&success=${success}`);
     }
   );
 });
