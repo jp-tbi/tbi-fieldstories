@@ -6,12 +6,18 @@
     <title><%= title %></title>
     <link rel="stylesheet" href="/public/styles.css" />
   </head>
-  <body>
+  <body class="submit-page">
     <main class="container">
       <div class="row">
         <h1><%= lang === "fr" ? "Soumission de contenu magasin" : "Store Content Submission" %></h1>
-        <div>
+        <div class="header-actions">
+          <a class="admin-link" href="/admin/login">
+            <span aria-hidden="true">🔒</span>
+            <span><%= lang === "fr" ? "Connexion admin" : "Admin Login" %></span>
+          </a>
+          <span class="lang-switch">
           <a href="/submit?lang=en">English</a> | <a href="/submit?lang=fr">Francais</a>
+          </span>
         </div>
       </div>
       <p>

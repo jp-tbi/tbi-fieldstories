@@ -46,6 +46,7 @@ app.set("trust proxy", 1);
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use("/public", express.static(path.join(__dirname, "public")));
+app.use("/assets", express.static(__dirname));
 app.use("/uploads", express.static(UPLOADS_DIR));
 
 app.use(
