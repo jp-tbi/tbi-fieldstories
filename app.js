@@ -4,6 +4,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
+const bcrypt = require("bcryptjs");
 const sqlite3 = require("sqlite3").verbose();
 const session = require("express-session");
 const SQLiteStore = require("connect-sqlite3")(session);
@@ -38,7 +39,56 @@ db.serialize(() => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS admin_credentials (
+      username TEXT PRIMARY KEY,
+      password_hash TEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 });
+
+function dbGet(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(row || null);
+    });
+  });
+}
+
+function dbRun(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function runCb(err) {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(this);
+    });
+  });
+}
+
+async function ensureAdminCredential() {
+  const existing = await dbGet(
+    "SELECT username FROM admin_credentials WHERE username = ?",
+    [ADMIN_USERNAME]
+  );
+  if (existing) {
+    return;
+  }
+  const hash = await bcrypt.hash(ADMIN_PASSWORD, 12);
+  await dbRun(
+    `
+      INSERT INTO admin_credentials (username, password_hash)
+      VALUES (?, ?)
+    `,
+    [ADMIN_USERNAME, hash]
+  );
+}
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -211,20 +261,31 @@ app.get("/admin/login", (req, res) => {
   });
 });
 
-app.post("/admin/login", (req, res) => {
+app.post("/admin/login", async (req, res) => {
   const username = String(req.body.username || "").trim();
   const password = String(req.body.password || "");
-
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-    req.session.isAdmin = true;
-    res.redirect("/admin");
-    return;
+  try {
+    const row = await dbGet(
+      "SELECT username, password_hash FROM admin_credentials WHERE username = ?",
+      [username]
+    );
+    const matches = row ? await bcrypt.compare(password, row.password_hash) : false;
+    if (matches) {
+      req.session.isAdmin = true;
+      req.session.adminUsername = row.username;
+      res.redirect("/admin");
+      return;
+    }
+    res.status(401).render("admin/login", {
+      title: "Admin Login",
+      error: "Invalid username or password.",
+    });
+  } catch (_err) {
+    res.status(500).render("admin/login", {
+      title: "Admin Login",
+      error: "Login failed. Please try again.",
+    });
   }
-
-  res.status(401).render("admin/login", {
-    title: "Admin Login",
-    error: "Invalid username or password.",
-  });
 });
 
 app.post("/admin/logout", (req, res) => {
@@ -268,6 +329,89 @@ app.get("/admin", requireAdmin, (_req, res) => {
   );
 });
 
+app.get("/admin/settings", requireAdmin, (req, res) => {
+  res.render("admin/settings", {
+    title: "Admin Settings",
+    adminUsername: req.session.adminUsername || ADMIN_USERNAME,
+    error: "",
+    success: "",
+  });
+});
+
+app.post("/admin/settings/password", requireAdmin, async (req, res) => {
+  const adminUsername = req.session.adminUsername || ADMIN_USERNAME;
+  const currentPassword = String(req.body.current_password || "");
+  const newPassword = String(req.body.new_password || "");
+  const confirmPassword = String(req.body.confirm_password || "");
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    res.status(400).render("admin/settings", {
+      title: "Admin Settings",
+      adminUsername,
+      error: "All password fields are required.",
+      success: "",
+    });
+    return;
+  }
+  if (newPassword.length < 10) {
+    res.status(400).render("admin/settings", {
+      title: "Admin Settings",
+      adminUsername,
+      error: "New password must be at least 10 characters.",
+      success: "",
+    });
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    res.status(400).render("admin/settings", {
+      title: "Admin Settings",
+      adminUsername,
+      error: "New password and confirmation do not match.",
+      success: "",
+    });
+    return;
+  }
+
+  try {
+    const row = await dbGet(
+      "SELECT password_hash FROM admin_credentials WHERE username = ?",
+      [adminUsername]
+    );
+    const matches = row ? await bcrypt.compare(currentPassword, row.password_hash) : false;
+    if (!matches) {
+      res.status(401).render("admin/settings", {
+        title: "Admin Settings",
+        adminUsername,
+        error: "Current password is incorrect.",
+        success: "",
+      });
+      return;
+    }
+    const newHash = await bcrypt.hash(newPassword, 12);
+    await dbRun(
+      `
+        UPDATE admin_credentials
+        SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE username = ?
+      `,
+      [newHash, adminUsername]
+    );
+    res.render("admin/settings", {
+      title: "Admin Settings",
+      adminUsername,
+      error: "",
+      success: "Password updated successfully.",
+    });
+  } catch (_err) {
+    res.status(500).render("admin/settings", {
+      title: "Admin Settings",
+      adminUsername,
+      error: "Could not update password right now.",
+      success: "",
+    });
+  }
+});
+
 app.use((err, _req, res, _next) => {
   if (err && err.message) {
     res.status(400).send(err.message);
@@ -276,7 +420,15 @@ app.use((err, _req, res, _next) => {
   res.status(500).send("Unexpected server error.");
 });
 
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`CMS running on http://localhost:${PORT}`);
-});
+ensureAdminCredential()
+  .then(() => {
+    app.listen(PORT, () => {
+      // eslint-disable-next-line no-console
+      console.log(`CMS running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error("Failed to initialize admin credentials.", err);
+    process.exit(1);
+  });

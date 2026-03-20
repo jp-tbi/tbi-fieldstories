@@ -10,9 +10,12 @@
     <main class="container">
       <header class="row">
         <h1>Admin Dashboard</h1>
-        <form method="POST" action="/admin/logout">
-          <button type="submit">Log out</button>
-        </form>
+        <div class="header-actions">
+          <a class="admin-link" href="/admin/settings">Settings</a>
+          <form method="POST" action="/admin/logout">
+            <button type="submit">Log out</button>
+          </form>
+        </div>
       </header>
 
       <% if (!submissions.length) { %>

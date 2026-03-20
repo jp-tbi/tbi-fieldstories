@@ -15,6 +15,7 @@
     "node": "20.x"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "connect-sqlite3": "^0.9.16",
     "dotenv": "^17.3.1",
     "ejs": "^5.0.1",
