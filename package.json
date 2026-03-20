@@ -11,6 +11,9 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
     "connect-sqlite3": "^0.9.16",
     "dotenv": "^17.3.1",
