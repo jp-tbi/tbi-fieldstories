@@ -46,6 +46,13 @@ db.serialize(() => {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS admin_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 });
 
 function dbGet(sql, params = []) {
@@ -70,6 +77,36 @@ function dbRun(sql, params = []) {
       resolve(this);
     });
   });
+}
+
+function dbAll(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(rows || []);
+    });
+  });
+}
+
+async function getMetaValue(key) {
+  const row = await dbGet("SELECT value FROM admin_meta WHERE key = ?", [key]);
+  return row ? row.value : null;
+}
+
+async function setMetaValue(key, value) {
+  await dbRun(
+    `
+      INSERT INTO admin_meta (key, value, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET
+        value = excluded.value,
+        updated_at = CURRENT_TIMESTAMP
+    `,
+    [key, value]
+  );
 }
 
 async function ensureAdminCredential() {
@@ -294,39 +331,113 @@ app.post("/admin/logout", (req, res) => {
   });
 });
 
-app.get("/admin", requireAdmin, (_req, res) => {
-  db.all(
-    `
-      SELECT *
-      FROM submissions
-      ORDER BY datetime(created_at) DESC
-    `,
-    [],
-    (err, rows) => {
-      if (err) {
-        res.status(500).send("Could not load submissions.");
-        return;
+app.get("/admin", requireAdmin, async (_req, res) => {
+  try {
+    const rows = await dbAll(
+      `
+        SELECT *
+        FROM submissions
+        ORDER BY datetime(created_at) DESC
+      `
+    );
+    const totalRow = await dbGet("SELECT COUNT(*) AS total_count FROM submissions");
+    const lastCsvDownloadedAt = await getMetaValue("last_csv_download_at");
+    const newCountRow = lastCsvDownloadedAt
+      ? await dbGet(
+          "SELECT COUNT(*) AS new_count FROM submissions WHERE datetime(created_at) > datetime(?)",
+          [lastCsvDownloadedAt]
+        )
+      : await dbGet("SELECT COUNT(*) AS new_count FROM submissions");
+
+    const submissions = rows.map((row) => {
+      let answers = [];
+      try {
+        answers = JSON.parse(row.answers_json);
+      } catch (_e) {
+        answers = [];
       }
+      return {
+        ...row,
+        answers,
+      };
+    });
 
-      const submissions = rows.map((row) => {
-        let answers = [];
-        try {
-          answers = JSON.parse(row.answers_json);
-        } catch (_e) {
-          answers = [];
-        }
-        return {
-          ...row,
-          answers,
-        };
-      });
+    res.render("admin/dashboard", {
+      title: "Admin Dashboard",
+      submissions,
+      totalSubmissions: totalRow ? totalRow.total_count : 0,
+      newSubmissions: newCountRow ? newCountRow.new_count : 0,
+      lastCsvDownloadedAt,
+    });
+  } catch (_err) {
+    res.status(500).send("Could not load submissions.");
+  }
+});
 
-      res.render("admin/dashboard", {
-        title: "Admin Dashboard",
-        submissions,
-      });
-    }
-  );
+function escapeCsvValue(value) {
+  const raw = String(value == null ? "" : value);
+  const escaped = raw.replace(/"/g, "\"\"");
+  return `"${escaped}"`;
+}
+
+app.get("/admin/submissions.csv", requireAdmin, async (_req, res) => {
+  try {
+    const rows = await dbAll(
+      `
+        SELECT *
+        FROM submissions
+        ORDER BY datetime(created_at) DESC
+      `
+    );
+    const timestamp = new Date().toISOString();
+    await setMetaValue("last_csv_download_at", timestamp);
+
+    const csvRows = [
+      [
+        "id",
+        "store_name",
+        "submitter_name",
+        "submitter_email",
+        "created_at",
+        "image_path",
+        "answers",
+      ].join(","),
+    ];
+
+    rows.forEach((row) => {
+      let answers = [];
+      try {
+        answers = JSON.parse(row.answers_json);
+      } catch (_e) {
+        answers = [];
+      }
+      const answersText = answers
+        .map((a) => `${a.label}: ${a.value || "-"}`)
+        .join(" | ");
+      csvRows.push(
+        [
+          row.id,
+          row.store_name,
+          row.submitter_name,
+          row.submitter_email || "",
+          row.created_at,
+          row.image_path || "",
+          answersText,
+        ]
+          .map(escapeCsvValue)
+          .join(",")
+      );
+    });
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="submissions-${timestamp.slice(0, 10)}.csv"`
+    );
+    res.send(csvRows.join("\n"));
+  } catch (_err) {
+    res.status(500).send("Could not export submissions.");
+  }
 });
 
 app.get("/admin/settings", requireAdmin, (req, res) => {

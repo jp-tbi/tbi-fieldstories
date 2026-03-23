@@ -11,6 +11,7 @@
       <header class="row">
         <h1>Admin Dashboard</h1>
         <div class="header-actions">
+          <a class="admin-link" href="/admin/submissions.csv">Download CSV</a>
           <a class="admin-link" href="/admin/settings">Settings</a>
           <form method="POST" action="/admin/logout">
             <button type="submit">Log out</button>
@@ -18,22 +19,39 @@
         </div>
       </header>
 
+      <section class="kpi-grid">
+        <article class="card kpi-card">
+          <p class="kpi-label">New Submission Count</p>
+          <p class="kpi-value"><%= newSubmissions %></p>
+          <p class="kpi-meta">
+            <% if (lastCsvDownloadedAt) { %>
+            Since CSV download at <%= lastCsvDownloadedAt %>
+            <% } else { %>
+            No CSV downloaded yet (all submissions are new)
+            <% } %>
+          </p>
+        </article>
+        <article class="card kpi-card">
+          <p class="kpi-label">Total Submissions</p>
+          <p class="kpi-value"><%= totalSubmissions %></p>
+        </article>
+      </section>
+
       <% if (!submissions.length) { %>
       <p>No submissions yet.</p>
       <% } %>
 
-      <div class="grid">
+      <div class="submission-list">
         <% submissions.forEach((item) => { %>
-        <article class="card submission">
-          <h2><%= item.store_name %></h2>
-          <p><strong>Submitted by:</strong> <%= item.submitter_name %> <%= item.submitter_email ? "(" + item.submitter_email + ")" : "" %></p>
-          <p><strong>Date:</strong> <%= item.created_at %></p>
-
+        <article class="card submission submission-row">
           <% if (item.image_path) { %>
-          <img src="/uploads/<%= item.image_path %>" alt="Submitted store photo" class="photo" />
+          <img src="/uploads/<%= item.image_path %>" alt="Submitted store photo" class="photo photo-thumb" />
           <% } %>
 
-          <section>
+          <section class="submission-content">
+            <h2><%= item.store_name %></h2>
+            <p><strong>Submitted by:</strong> <%= item.submitter_name %> <%= item.submitter_email ? "(" + item.submitter_email + ")" : "" %></p>
+            <p><strong>Date:</strong> <%= item.created_at %></p>
             <% item.answers.forEach((a) => { %>
             <p><strong><%= a.label %></strong><br /><%= a.value || "-" %></p>
             <% }) %>
